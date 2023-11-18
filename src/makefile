@@ -15,3 +15,6 @@ all: $(EXE)
 
 clean:
 	rm -f *.o core $(EXE)
+
+remove:
+	rm test.db

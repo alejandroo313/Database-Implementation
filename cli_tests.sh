@@ -14,7 +14,7 @@ set wrongStrategy "Unknown search strategy unknown_search_strategy"
 # Do NOT edit anything below this point
 
 set timeout -1
-set programName "library"
+set programName "src/library"
 set output "init"
 
 # no arguments
