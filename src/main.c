@@ -11,12 +11,13 @@ typedef struct{
 }books;
 
 
-int main(){
+int main(char argc, char*argv[]){
     char funcion[] = {"add 12345|978-2-12345680-3|El Quijote|catedra"};
     books book;
-
+    char hola[] = {"database"}; 
     char *token = NULL;
     char *key = NULL;
+    char *input = NULL;
 
     printf("funcion = %s\n", funcion);
     token = strtok(funcion, " ");
@@ -56,6 +57,21 @@ int main(){
     printf("editorial = %s\n", book.editorial);
     printf("tamanio = %ld\n", book.tamanio);
 
+    printf("int: %ld, long: %ld", sizeof(int), sizeof(long int));
+
+    input = (char*)malloc(book.tamanio*sizeof(char));
+    if(!input){
+        free(book.titulo);
+        free(book.editorial);
+        return 1;
+    }
+
+    sprintf(input, "%ld %d %s %s %s\n", book.tamanio, book.id, book.isbn, book.titulo, book.editorial);
+
+    printf("%s", input);
+    printf("\\");
+    hola[8] = '\0';
+    printf("%ld, %ld", sizeof(argv[1]), strlen(argv[1])+strlen(".ind")+1);
     free(key);
     free(book.titulo);
     free(book.editorial);

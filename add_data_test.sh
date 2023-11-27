@@ -5,7 +5,7 @@
 # first test
 set timeout -1
 set filename "test"
-set programName "./src/library"
+set programName "src/library"
 
 # delete all files starting with $filename
 spawn rm -f /src/$filename.db /src/$filename.ind
@@ -21,6 +21,7 @@ expect "Record with BookID=12345 has been added to the database"
 expect "exit"
 # add second book
 send  "add 12346|978-2-12345086-3|La busca|Catedra\r"
+expect "Record with BookID=12346 has been added to the database"
 expect "exit"
 
 # add third book

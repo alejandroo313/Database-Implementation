@@ -1,4 +1,4 @@
-CC = gcc #-g
+CC = gcc -g
 CFLAGS = -Wall -Wextra -pedantic -ansi
 
 HEADERS = library.h
@@ -17,4 +17,4 @@ clean:
 	rm -f *.o core $(EXE)
 
 remove:
-	rm test.db
+	rm *.db *ind
