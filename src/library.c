@@ -83,7 +83,7 @@ int main( int argc, char *argv[]){
             fclose(ind);
             return 0;
         }
-        initArray(a, 1);
+        initArray(a, 2);
 
         printf("Type command and argument/s.\n");
         printf("exit\n");
@@ -139,6 +139,8 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     size_t length = 0;
     
     if(!db || !arguments || !ind) return -1;
+
+    fseek(db, 0L, SEEK_END);
 
     book = (Book*)malloc(sizeof(Book));
     book->tamanio = 0;
@@ -201,10 +203,9 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     if(!ibook) return -1;*/
 
     ibook.key = book->id;
-    if(a->used == 0){
-        ibook.offset = 0;
-    }else{
-        ibook.offset = a->array[a->used-1].offset + a->array[a->used-1].size + sizeof(size_t);
+    ibook.offset = 0;
+    if(a->used != 0){
+        ibook.offset = ftell(db)-(book->tamanio+8);
     }
     
     ibook.size = book->tamanio;
@@ -270,12 +271,27 @@ void initArray(Array *a, size_t initialSize){
 }
 
 void insertArray(Array *a, Indexbook element){
+    Indexbook elem;
+    int j;
     if(a->used == a->size){
         a->size *=2;
         a->array = realloc(a->array, a->size*sizeof(Indexbook));
     }
 
-    a->array[a->used++] = element;
+    a->array[a->used+1] = element;
+
+    if(a->used != 0){
+        elem = a->array[a->used+1];
+        j = a->used-1;
+
+        while(j >= 0 && a->array[j].key > elem.key){
+            a->array[j+1] = a->array[j];
+            j--;
+        }
+
+        a->array[j+1] = elem;
+    }
+    a->used++;
 }
 
 void freeArray(Array *a){
