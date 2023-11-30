@@ -97,6 +97,8 @@ int main( int argc, char *argv[]){
                 ret = add(db, ind, token, a);
                 if(ret == -1){
                     printf("Error en el guardado de los datos\n");
+                    free(database);
+                    free(index);
                     return 1;
                 }
                 printf("Record with BookID=%d has been added to the database\n", ret);
@@ -143,42 +145,75 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     fseek(db, 0L, SEEK_END);
 
     book = (Book*)malloc(sizeof(Book));
+    if(!book) return -1;
     book->tamanio = 0;
 
     /*sacamos book_id de arguments y lo copiamos a la estructura*/
     token = strtok(arguments, "|");
-    if(!token) return -1;
+    if(!token){
+        free(book);
+        return -1;
+    }
     
     book->id = atoi(token);
 
     book->isbn = (char*)malloc(ISBN_LEN+1*sizeof(char));
+    if(!book->isbn){
+        free(book);
+        return -1;
+    }
 
     /*sacamos el isbn de arguments y lo copiamos a la estructura*/
     token = strtok(NULL, "|");
-    if(!token) return -1;
+    if(!token){
+        free(book->isbn);
+        free(book);
+        return -1;
+    }
     strncpy(book->isbn, token, ISBN_LEN);
-    
+
+    length = strlen(token);
+    book->titulo = (char*)malloc(length+2*sizeof(char));
+    if(!book->titulo){
+        free(book->isbn);
+        free(book);
+        return -1;
+    }
+
     /*sacamos el titulo de arguments, reservamos memoria para
      *el titulo y lo copiamos a la estructura
      */
     token = strtok(NULL, "|");
-    if(!token) return -1;
-
-    length = strlen(token);
-    book->titulo = (char*)malloc(length+2*sizeof(char));
+    if(!token){
+        free(book->isbn);
+        free(book->titulo);
+        free(book);
+        return -1;
+    }
 
     strncpy(book->titulo, token, length);
     strcat(book->titulo, "|");
+
+    length = strlen(token);
+    book->editorial = (char*)malloc(length+1*sizeof(char));
+    if(!book->editorial){
+        free(book->isbn);
+        free(book->titulo);
+        free(book);
+        return -1;
+    }
 
     /*sacamos la editorial de arguments, reservamos memoria para
      *la editorial y lo copiamos a la estructura
      */
     token = strtok(NULL, "\n");
-    if(!token) return -1;
-
-    length = strlen(token);
-    book->editorial = (char*)malloc(length+1*sizeof(char));
-
+    if(!token){
+        free(book->isbn);
+        free(book->titulo);
+        free(book->editorial);
+        free(book);
+        return -1;
+    }
     strncpy(book->editorial, token, length);
 
     length = strlen(book->editorial);
@@ -231,6 +266,7 @@ void printInd(Array *a){
         printf("Entry #%d\n", i);
         printf("    key: #%d\n", a->array[i].key);
         printf("    offset: #%ld\n", a->array[i].offset);
+        printf("    size: #%ld\n", a->array[i].size);
     }
 }
 
@@ -278,19 +314,20 @@ void insertArray(Array *a, Indexbook element){
         a->array = realloc(a->array, a->size*sizeof(Indexbook));
     }
 
-    a->array[a->used+1] = element;
+    a->array[a->used] = element;
 
-    if(a->used != 0){
-        elem = a->array[a->used+1];
+    if(a->used > 0){
+        elem = a->array[a->used];
         j = a->used-1;
 
-        while(j >= 0 && a->array[j].key > elem.key){
+        while (j>= 0 && a->array[j].key > elem.key){
             a->array[j+1] = a->array[j];
             j--;
         }
 
         a->array[j+1] = elem;
     }
+
     a->used++;
 }
 
