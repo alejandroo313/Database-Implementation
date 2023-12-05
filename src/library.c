@@ -44,37 +44,6 @@ int main( int argc, char *argv[]){
             return 0;
         }
 
-        database = (char*)malloc(strlen(argv[2])+strlen(".db")+1*sizeof(char));
-        if(!database){
-            return 0;
-        }
-
-        index = (char*)malloc(strlen(argv[2])+strlen(".ind")+1*sizeof(char));
-        if(!index){
-            free(database);
-            return 0;
-        }
-
-        strcpy(database, argv[2]);
-        strcat(database, ".db");
-
-        db = fopen(database, "wb");
-        if(!db){
-            free(database);
-            free(index);
-            return 0;
-        }
-
-        strcpy(index, argv[2]);
-        strcat(index, ".ind");
-        ind = fopen(index, "wb");
-        if(!ind){
-            fclose(db);
-            free(database);
-            free(index);
-            return 0;
-        }
-
         a = (Array*)malloc(sizeof(Array));
         if(!a){
             fclose(db);
@@ -84,6 +53,42 @@ int main( int argc, char *argv[]){
             return 0;
         }
         initArray(a, 2);
+
+        index = (char*)malloc(strlen(argv[2])+strlen(".ind")+1*sizeof(char));
+        if(!index){
+            free(database);
+            return 0;
+        }
+
+        strcpy(index, argv[2]);
+        strcat(index, ".ind");
+        
+        if((ind = fopen(index, "r"))!= NULL){
+            Loadfromfile(ind, a);
+        }
+
+        ind = fopen(index, "wb");
+        if(!ind){
+            fclose(db);
+            free(database);
+            free(index);
+            return 0;
+        }
+
+        database = (char*)malloc(strlen(argv[2])+strlen(".db")+1*sizeof(char));
+        if(!database){
+            return 0;
+        }
+
+        strcpy(database, argv[2]);
+        strcat(database, ".db");
+
+        db = fopen(database, "ab");
+        if(!db){
+            free(database);
+            free(index);
+            return 0;
+        }
 
         printf("Type command and argument/s.\n");
         printf("exit\n");
@@ -238,11 +243,10 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     if(!ibook) return -1;*/
 
     ibook.key = book->id;
-    ibook.offset = 0;
-    if(a->used != 0){
-        ibook.offset = ftell(db)-(book->tamanio+8);
-    }
+
+    fseek(db, 0L, SEEK_END);
     
+    ibook.offset = ftell(db)-(book->tamanio+8);
     ibook.size = book->tamanio;
     /*insertar indexbook a array*/
     insertArray(a, ibook);
@@ -295,6 +299,24 @@ void Saveinfile(FILE *ind, Array *a){
         fwrite(&a->array[i].offset, sizeof(long), 1, ind);
         fwrite(&a->array[i].size, sizeof(size_t), 1, ind);
     }
+}
+
+void Loadfromfile(FILE *ind, Array *a){
+    Indexbook index;
+    size_t ret = 1;
+
+    while(TRUE){
+        ret = fread(&index.key, sizeof(int), 1, ind);
+        ret = fread(&index.offset, sizeof(long), 1, ind);
+        ret = fread(&index.size, sizeof(size_t), 1, ind);
+
+        if(ret == 0){
+            break;
+        }
+
+        insertArray(a, index);
+    }
+    fclose(ind);
 }
 
 void initArray(Array *a, size_t initialSize){
