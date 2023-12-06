@@ -83,12 +83,12 @@ int main( int argc, char *argv[]){
         strcpy(database, argv[2]);
         strcat(database, ".db");
 
-        db = fopen(database, "ab");
+        /*db = fopen(database, "ab");
         if(!db){
             free(database);
             free(index);
             return 0;
-        }
+        }*/
 
         printf("Type command and argument/s.\n");
         printf("exit\n");
@@ -99,17 +99,30 @@ int main( int argc, char *argv[]){
             token = strtok(NULL, "");
 
             if(strcmp("add", key) == 0){
+                if(db == NULL){
+                    db = fopen(database, "ab");
+                    if(!db){
+                        free(database);
+                        free(index);
+                        return 0;
+                    }
+                }
                 ret = add(db, ind, token, a);
+
                 if(ret == -1){
                     printf("Error en el guardado de los datos\n");
-                    free(database);
-                    free(index);
+                    Exit(db, ind, database, index, a);
                     return 1;
                 }
                 printf("Record with BookID=%d has been added to the database\n", ret);
                 printf("exit\n");
             }else if(strcmp("find", key)== 0){
-                printf("find\n");
+                ret = find(database, a, atoi(token), 0, a->used);
+                if(ret == -1){
+                    printf("Record with bookId=%s does not exist\n", token);
+                    Exit(db, ind, database, index, a);
+                    return 1;
+                }
             }else if(strcmp("del", key)== 0){
                 printf("del\n");
             }else if(strcmp("exit\n", key)== 0){
@@ -144,6 +157,7 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     Indexbook ibook;
     int ret = 0;
     size_t length = 0;
+    long unsigned int i;
     
     if(!db || !arguments || !ind) return -1;
 
@@ -168,6 +182,10 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
         return -1;
     }
 
+    for(i = 0; i<ISBN_LEN+1; i++){
+        book->isbn[i] = '\0';
+    }
+
     /*sacamos el isbn de arguments y lo copiamos a la estructura*/
     token = strtok(NULL, "|");
     if(!token){
@@ -177,13 +195,6 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     }
     strncpy(book->isbn, token, ISBN_LEN);
 
-    length = strlen(token);
-    book->titulo = (char*)malloc(length+2*sizeof(char));
-    if(!book->titulo){
-        free(book->isbn);
-        free(book);
-        return -1;
-    }
 
     /*sacamos el titulo de arguments, reservamos memoria para
      *el titulo y lo copiamos a la estructura
@@ -196,17 +207,22 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
         return -1;
     }
 
-    strncpy(book->titulo, token, length);
-    strcat(book->titulo, "|");
-
     length = strlen(token);
-    book->editorial = (char*)malloc(length+1*sizeof(char));
-    if(!book->editorial){
+    book->titulo = (char*)malloc(length+2*sizeof(char));
+    if(!book->titulo){
         free(book->isbn);
-        free(book->titulo);
         free(book);
         return -1;
     }
+
+    for(i = 0; i<length+2; i++){
+        book->titulo[i] = '\0';
+    }
+
+    strncpy(book->titulo, token, length);
+    strcat(book->titulo, "|");
+
+    
 
     /*sacamos la editorial de arguments, reservamos memoria para
      *la editorial y lo copiamos a la estructura
@@ -219,6 +235,20 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
         free(book);
         return -1;
     }
+    
+    length = strlen(token);
+    book->editorial = (char*)malloc(length+1*sizeof(char));
+    if(!book->editorial){
+        free(book->isbn);
+        free(book->titulo);
+        free(book);
+        return -1;
+    }
+
+    for(i = 0; i<length+1; i++){
+        book->editorial[i] = '\0';
+    }
+
     strncpy(book->editorial, token, length);
 
     length = strlen(book->editorial);
@@ -232,8 +262,8 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     printf("tamanio: %ld, stlen: %ld\n", book->tamanio, sizeof(book->tamanio));*/
     /*PROBLEMA AL PASAR STRINGS*/    
     /*copiamos toda la informacion en el fichero binario*/
-    ret = fwrite(&book->tamanio, sizeof(book->tamanio), 1, db);
-    ret = fwrite(&book->id, sizeof(book->id), 1, db);
+    ret = fwrite(&book->tamanio, sizeof(size_t), 1, db);
+    ret = fwrite(&book->id, sizeof(int), 1, db);
     ret = fwrite(book->isbn, ISBN_LEN, 1, db);
     ret = fwrite(book->titulo, strlen(book->titulo), 1, db);
     ret = fwrite(book->editorial, length, 1, db);
@@ -263,6 +293,156 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     return ibook.key;
 }
 
+int find(char *database, Array *a, int key, int ip, int iu){
+    int m;
+    long unsigned int i;
+    Book *b = NULL;
+    size_t ret, length;
+    FILE *db = NULL;
+    char buffer[256] = {'\0'}, *token = NULL;
+
+    if(!database || !a || key<0 || ip>iu) return -1;
+
+    db = fopen(database, "r");
+    if(!db) return -1;
+
+    b = (Book*)malloc(sizeof(Book));
+    if(!b){
+        fclose(db);
+        return -1;
+    }
+
+    while(ip<=iu){
+        m = (ip+iu)/2;
+        if(a->array[m].key == key){
+            break;
+        }else if(key < a->array[m].key){
+            iu = m-1;
+        }else{
+            ip = m+1;
+        }
+    }
+
+    if(a->array[m].key != key){
+        fclose(db);
+        free(b);
+        return -1;
+    }
+    
+    fseek(db, a->array[m].offset+sizeof(size_t), SEEK_SET);
+    
+    b->id = 0;
+    ret = fread(&b->id, sizeof(int), 1, db);
+
+    b->isbn = (char*)malloc(ISBN_LEN+1*sizeof(char));
+
+    for(i = 0; i<ISBN_LEN+1; i++){
+        b->isbn[i] = '\0';
+    }
+    ret = fread(b->isbn, ISBN_LEN, 1, db);
+
+    ret = fread(buffer, a->array[m].size-sizeof(int)-ISBN_LEN, 1, db);
+
+    if(ret != 1){
+        fclose(db);
+        free(b->isbn);
+        free(b);
+        return -1;
+    }
+    
+    token = strtok(buffer, "|");
+    length = strlen(token);
+
+    b->titulo = (char*)malloc(length+1*sizeof(char));
+    if(!b->titulo){
+        fclose(db);
+        free(b->isbn);
+        free(b);
+        return -1;
+    }
+
+    for(i = 0; i<length+1; i++){
+        b->titulo[i] = '\0';
+    }
+
+    strncpy(b->titulo, token, length);
+
+    token = strtok(NULL, "\0");
+    length = strlen(token);
+
+    b->editorial = (char*)malloc(length+1*sizeof(char));
+    if(!b->editorial){
+        fclose(db);
+        free(b->isbn);
+        free(b->titulo);
+        free(b);
+        return -1;
+    }
+
+    for(i = 0; i<length+1; i++){
+        b->editorial[i] = '\0';
+    }
+
+    strncpy(b->editorial, token, length);
+    printf("%d|%s|%s|%s\n", b->id, b->isbn, b->titulo, b->editorial);
+
+    free(b->isbn);
+    free(b->titulo);
+    free(b->editorial);
+    free(b);
+    fclose(db);
+
+    return 1;
+}
+
+void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
+    Saveinfile(ind, a);
+    
+    if(a->array != NULL){
+        free(a->array);
+        free(a);
+    }
+    
+    if(db != NULL){
+        fclose(db);
+    }
+    
+    if(ind != NULL){
+        fclose(ind);
+    }
+    
+    if(database != NULL){
+        free(database);
+    }
+
+    if(index != NULL){
+        free(index);
+    }
+    
+}
+
+void PrintRec(FILE *db, Array *a){
+    Book *registro = NULL;
+    size_t ret = 1;
+    if(!db || !a) return;
+
+    registro = (Book*)malloc(sizeof(Book));
+    if(!registro) return;
+
+    /*registro->isbn = */
+
+    rewind(db);
+    while(TRUE){
+        ret = fread(&registro->tamanio, sizeof(size_t), 1, db);
+        ret = fread(&registro->id, sizeof(int), 1, db);
+        ret = fread(&registro->isbn, sizeof(size_t), 1, db);
+        ret = fread(&registro->tamanio, sizeof(size_t), 1, db);
+        ret = fread(&registro->tamanio, sizeof(size_t), 1, db);
+    }
+
+
+}
+
 void printInd(Array *a){
     unsigned i;
 
@@ -274,18 +454,7 @@ void printInd(Array *a){
     }
 }
 
-void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
-    if(!db || !ind || !database || !index || !a) return;
 
-    Saveinfile(ind, a);
-
-    free(a->array);
-    free(a);
-    fclose(db);
-    fclose(ind);
-    free(database);
-    free(index);
-}
 
 void Saveinfile(FILE *ind, Array *a){
     unsigned i;
