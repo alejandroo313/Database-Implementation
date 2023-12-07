@@ -12,7 +12,7 @@ typedef enum {
 int add(FILE *db, FILE *ind, char *arguments, Array *a);
 int find(char *db, Array *a, int key, int ip, int iu);
 void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a);
-void PrintRec(FILE *db, Array *a);
+void PrintRec(char *database, Array *a);
 void printInd(Array *a);
 
 void Saveinfile(FILE *ind, Array *a);

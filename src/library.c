@@ -128,8 +128,8 @@ int main( int argc, char *argv[]){
             }else if(strcmp("exit\n", key)== 0){
                 Exit(db, ind, database, index, a);
                 break;
-            }else if(strcmp("printRec", key)== 0){
-                printf("printRec\n");
+            }else if(strcmp("printRec\n", key)== 0){
+                PrintRec(database, a);
             }else if(strcmp("printInd\n", key)== 0){
                 printInd(a);
                 printf("exit\n");
@@ -251,9 +251,8 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
 
     strncpy(book->editorial, token, length);
 
-    length = strlen(book->editorial);
     /*obtenemos el tamaño total del registro*/
-    book->tamanio = ISBN_LEN + strlen(book->titulo) + length + sizeof(book->id);
+    book->tamanio = ISBN_LEN + strlen(book->titulo) + strlen(book->editorial) + sizeof(book->id);
 
     /*printf("id: %d, stlen: %ld\n", book->id, sizeof(book->id));
     printf("isbn: %s, stlen: %ld\n", book->isbn, strlen(book->isbn));
@@ -421,26 +420,54 @@ void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
     
 }
 
-void PrintRec(FILE *db, Array *a){
-    Book *registro = NULL;
-    size_t ret = 1;
-    if(!db || !a) return;
+void PrintRec(char *database, Array *a){
+    Book *b = NULL;
+    FILE *db = NULL;
+    size_t length;
+    long unsigned int i, j;
+    char buffer[256] = {'\0'};
 
-    registro = (Book*)malloc(sizeof(Book));
-    if(!registro) return;
+    if(!database || !a) return;
 
-    /*registro->isbn = */
+    db = fopen(database, "r");
+    if(!db) return;
 
-    rewind(db);
-    while(TRUE){
-        ret = fread(&registro->tamanio, sizeof(size_t), 1, db);
-        ret = fread(&registro->id, sizeof(int), 1, db);
-        ret = fread(&registro->isbn, sizeof(size_t), 1, db);
-        ret = fread(&registro->tamanio, sizeof(size_t), 1, db);
-        ret = fread(&registro->tamanio, sizeof(size_t), 1, db);
+    b = (Book*)malloc(sizeof(Book));
+    if(!b){
+        fclose(db);
+        return;
+    } 
+
+    b->isbn = (char*)malloc(ISBN_LEN+1*sizeof(char));
+    if(!b->isbn){
+        fclose(db);
+        free(b);
+        return;
     }
 
+    for(i = 0; i<ISBN_LEN+1; i++){
+        b->isbn[i] = '\0';
+    }
 
+    for(i=0; i<a->used; i++){
+        fseek(db, a->array[i].offset+sizeof(size_t), SEEK_SET);
+
+        fread(&b->id, sizeof(int), 1, db);
+        fread(b->isbn, ISBN_LEN, 1, db);
+        fread(buffer, a->array[i].size-sizeof(int)-ISBN_LEN, 1, db);
+
+        printf("%d|%s|%s\n", b->id, b->isbn, buffer);
+
+        length = strlen(buffer);
+        for(j=0; j<length+1; j++){
+            buffer[j] = '\0';
+        }
+        
+    }
+    
+    free(b->isbn);
+    free(b);
+    fclose(db);
 }
 
 void printInd(Array *a){
