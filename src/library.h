@@ -19,5 +19,5 @@ void Saveinfile(FILE *ind, Array *a);
 void Loadfromfile(FILE *ind, Array *a);
 
 void initArray(Array *a, size_t initialSize);
-void insertArray(Array *a, Indexbook element);
+void insertArray(Array *a, void *element);
 void freeArray(Array *a);

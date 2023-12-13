@@ -19,7 +19,7 @@ struct _Indexbook{
 };
 
 struct _Array{
-    Indexbook * array;
+    void **array;
     size_t used;
     size_t size;
 };
@@ -113,9 +113,12 @@ int main( int argc, char *argv[]){
                     printf("Error en el guardado de los datos\n");
                     Exit(db, ind, database, index, a);
                     return 1;
+                }else if(ret == 0){
+                    printf("The key has already been introduced\n");
+                }else{
+                    printf("Record with BookID=%d has been added to the database\n", ret);
+                    printf("exit\n");
                 }
-                printf("Record with BookID=%d has been added to the database\n", ret);
-                printf("exit\n");
             }else if(strcmp("find", key)== 0){
                 ret = find(database, a, atoi(token), 0, a->used);
                 if(ret == -1){
@@ -154,7 +157,7 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     /*escribir en el fichero pf en binario los datos y hacer el retorno oportuno*/
     char *token = NULL;
     Book *book = NULL;
-    Indexbook ibook;
+    Indexbook *ibook = NULL;
     int ret = 0;
     size_t length = 0;
     long unsigned int i;
@@ -175,6 +178,14 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     }
     
     book->id = atoi(token);
+
+    for(i=0; i<a->used; i++){
+        ibook = (Indexbook*)a->array[i];
+        if(ibook->key == book->id){
+            return 0;
+        }
+    }
+    ibook = NULL;
 
     book->isbn = (char*)malloc(ISBN_LEN+1*sizeof(char));
     if(!book->isbn){
@@ -271,12 +282,17 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     /*ibook = (Indexbook*)malloc(sizeof(Indexbook));
     if(!ibook) return -1;*/
 
-    ibook.key = book->id;
+    ibook = (Indexbook*)malloc(sizeof(Indexbook));
+    if(!ibook){
+        return -1;
+    }
+
+    ibook->key = book->id;
 
     fseek(db, 0L, SEEK_END);
     
-    ibook.offset = ftell(db)-(book->tamanio+8);
-    ibook.size = book->tamanio;
+    ibook->offset = ftell(db)-(book->tamanio+8);
+    ibook->size = book->tamanio;
     /*insertar indexbook a array*/
     insertArray(a, ibook);
 
@@ -289,7 +305,7 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
 
     if(ret != 1) return -1;
     
-    return ibook.key;
+    return ibook->key;
 }
 
 int find(char *database, Array *a, int key, int ip, int iu){
@@ -297,6 +313,7 @@ int find(char *database, Array *a, int key, int ip, int iu){
     long unsigned int i;
     Book *b = NULL;
     size_t ret, length;
+    Indexbook *index = NULL;
     FILE *db = NULL;
     char buffer[256] = {'\0'}, *token = NULL;
 
@@ -313,22 +330,23 @@ int find(char *database, Array *a, int key, int ip, int iu){
 
     while(ip<=iu){
         m = (ip+iu)/2;
-        if(a->array[m].key == key){
+        index = (Indexbook*)a->array[m];
+        if(index->key == key){
             break;
-        }else if(key < a->array[m].key){
+        }else if(key < index->key){
             iu = m-1;
         }else{
             ip = m+1;
         }
     }
 
-    if(a->array[m].key != key){
+    if(index->key != key){
         fclose(db);
         free(b);
         return -1;
     }
     
-    fseek(db, a->array[m].offset+sizeof(size_t), SEEK_SET);
+    fseek(db, index->offset+sizeof(size_t), SEEK_SET);
     
     b->id = 0;
     ret = fread(&b->id, sizeof(int), 1, db);
@@ -340,7 +358,7 @@ int find(char *database, Array *a, int key, int ip, int iu){
     }
     ret = fread(b->isbn, ISBN_LEN, 1, db);
 
-    ret = fread(buffer, a->array[m].size-sizeof(int)-ISBN_LEN, 1, db);
+    ret = fread(buffer, index->size-sizeof(int)-ISBN_LEN, 1, db);
 
     if(ret != 1){
         fclose(db);
@@ -395,9 +413,16 @@ int find(char *database, Array *a, int key, int ip, int iu){
 }
 
 void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
+    long unsigned int i;
     Saveinfile(ind, a);
     
     if(a->array != NULL){
+        if(a->used != 0){
+            for(i=0; i<a->used; i++){
+                free(a->array[i]);
+            }
+        }
+        
         free(a->array);
         free(a);
     }
@@ -417,12 +442,15 @@ void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
     if(index != NULL){
         free(index);
     }
+
+
     
 }
 
 void PrintRec(char *database, Array *a){
     Book *b = NULL;
     FILE *db = NULL;
+    Indexbook *index = NULL;
     size_t length;
     long unsigned int i, j;
     char buffer[256] = {'\0'};
@@ -450,11 +478,13 @@ void PrintRec(char *database, Array *a){
     }
 
     for(i=0; i<a->used; i++){
-        fseek(db, a->array[i].offset+sizeof(size_t), SEEK_SET);
+        index = (Indexbook*)a->array[i];
+
+        fseek(db, index->offset+sizeof(size_t), SEEK_SET);
 
         fread(&b->id, sizeof(int), 1, db);
         fread(b->isbn, ISBN_LEN, 1, db);
-        fread(buffer, a->array[i].size-sizeof(int)-ISBN_LEN, 1, db);
+        fread(buffer, index->size-sizeof(int)-ISBN_LEN, 1, db);
 
         printf("%d|%s|%s\n", b->id, b->isbn, buffer);
 
@@ -472,39 +502,46 @@ void PrintRec(char *database, Array *a){
 
 void printInd(Array *a){
     unsigned i;
+    Indexbook *index = NULL;
 
     for(i=0; i<a->used; i++){
+        index = (Indexbook*)a->array[i];
+
         printf("Entry #%d\n", i);
-        printf("    key: #%d\n", a->array[i].key);
-        printf("    offset: #%ld\n", a->array[i].offset);
-        printf("    size: #%ld\n", a->array[i].size);
+        printf("    key: #%d\n", index->key);
+        printf("    offset: #%ld\n", index->offset);
+        printf("    size: #%ld\n", index->size);
     }
 }
 
-
-
 void Saveinfile(FILE *ind, Array *a){
     unsigned i;
+    Indexbook *index = NULL;
 
     for(i=0; i<a->used; i++){
         /*printf("key en la posicion %d: %d\n", i, a->array[i].key);
         printf("offset en la posicion %d: %ld\n", i, a->array[i].offset);
         printf("tam en la posicion %d: %ld\n", i, a->array[i].size);*/
 
-        fwrite(&a->array[i].key, sizeof(int), 1, ind);
-        fwrite(&a->array[i].offset, sizeof(long), 1, ind);
-        fwrite(&a->array[i].size, sizeof(size_t), 1, ind);
+        index = (Indexbook*)a->array[i];
+
+        fwrite(&index->key, sizeof(int), 1, ind);
+        fwrite(&index->offset, sizeof(long), 1, ind);
+        fwrite(&index->size, sizeof(size_t), 1, ind);
     }
 }
 
 void Loadfromfile(FILE *ind, Array *a){
-    Indexbook index;
+    Indexbook *index = NULL;
     size_t ret = 1;
 
     while(TRUE){
-        ret = fread(&index.key, sizeof(int), 1, ind);
-        ret = fread(&index.offset, sizeof(long), 1, ind);
-        ret = fread(&index.size, sizeof(size_t), 1, ind);
+        index = (Indexbook*)malloc(sizeof(Indexbook));
+        if(!index) return;
+
+        ret = fread(&index->key, sizeof(int), 1, ind);
+        ret = fread(&index->offset, sizeof(long), 1, ind);
+        ret = fread(&index->size, sizeof(size_t), 1, ind);
 
         if(ret == 0){
             break;
@@ -512,33 +549,43 @@ void Loadfromfile(FILE *ind, Array *a){
 
         insertArray(a, index);
     }
+
+    free(index);
     fclose(ind);
 }
 
 void initArray(Array *a, size_t initialSize){
+    long unsigned int i;
+    a->array = (void**)malloc(initialSize*sizeof(void*));
 
-    a->array = (Indexbook*)malloc(initialSize*sizeof(Indexbook));
     if(!a->array) return;
 
     a->used = 0;
     a->size = initialSize;
+
+    for(i=0; i<a->size; i++){
+        a->array[i] = NULL;
+    }
 }
 
-void insertArray(Array *a, Indexbook element){
-    Indexbook elem;
+void insertArray(Array *a, void *element){
+    Indexbook *elem = NULL, *key = NULL;
     int j;
     if(a->used == a->size){
         a->size *=2;
-        a->array = realloc(a->array, a->size*sizeof(Indexbook));
+        a->array = realloc(a->array, a->size*sizeof(void*));
     }
 
     a->array[a->used] = element;
 
     if(a->used > 0){
-        elem = a->array[a->used];
+        elem = (Indexbook*)a->array[a->used];
         j = a->used-1;
 
-        while (j>= 0 && a->array[j].key > elem.key){
+        key = (Indexbook*)a->array[j];
+
+        while (j>= 0 && key->key > elem->key){
+            key = (Indexbook*)a->array[j];
             a->array[j+1] = a->array[j];
             j--;
         }
