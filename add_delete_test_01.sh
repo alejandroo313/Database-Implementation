@@ -5,7 +5,7 @@
 ##     and file with list is saved
 ## c) check add after delete with the different strategies
 set timeout -1
-set programName "library"
+set programName "src/library"
 set filename "test"
 
 # delete all files starting with test

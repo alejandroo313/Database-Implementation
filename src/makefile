@@ -13,8 +13,21 @@ all: $(EXE)
 	@echo Compiling $<...
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+bestfit:
+	@echo Running library database with best_fit strategy
+	@./library best_fit test
+
+worstfit:
+	@echo Running library database with worst_fit strategy
+	@./library worst_fit test
+
+firstfit:
+	@echo Running library database with first_fit strategy
+	@./library first_fit test
+
 clean:
 	rm -f *.o core $(EXE)
 
-remove:
-	rm *.db *ind
+delete:
+	@echo Deleting all database files
+	rm *.db *.ind *.lst

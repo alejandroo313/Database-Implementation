@@ -24,16 +24,17 @@ struct _Array{
     size_t size;
 };
 
+struct _Indexdeletedbook{
+    size_t register_size;
+    size_t offset;
+};
 
 int main( int argc, char *argv[]){
-    FILE *db = NULL, *ind = NULL;
-    Array *a = NULL;
-    char input[512];
-    char *token = NULL;
-    char *key = NULL;
-    int ret = 0;
-    char *database = NULL;
-    char *index = NULL;
+    FILE *db = NULL, *ind = NULL, *del = NULL;
+    Array *a_index = NULL, *a_deleted = NULL;
+    char input[512], *token = NULL, *key = NULL;
+    int ret = 0, strategy;
+    char *database = NULL, *index = NULL, *deleted = NULL;
     
     if(argc <3){
         printf("Missing argument\n");
@@ -44,15 +45,23 @@ int main( int argc, char *argv[]){
             return 0;
         }
 
-        a = (Array*)malloc(sizeof(Array));
-        if(!a){
+        if(strcmp("best_fit", argv[1]) == 0){
+            strategy = BESTFIT;
+        }else if(strcmp("worst_fit", argv[1]) == 0){                
+            strategy = WORSTFIT;
+        }else{
+            strategy = FIRSTFIT;
+        }
+
+        a_index = (Array*)malloc(sizeof(Array));
+        if(!a_index){
             fclose(db);
             free(database);
             free(index);
             fclose(ind);
             return 0;
         }
-        initArray(a, 2);
+        initArray(a_index, 2);
 
         index = (char*)malloc(strlen(argv[2])+strlen(".ind")+1*sizeof(char));
         if(!index){
@@ -64,11 +73,42 @@ int main( int argc, char *argv[]){
         strcat(index, ".ind");
         
         if((ind = fopen(index, "r"))!= NULL){
-            Loadfromfile(ind, a);
+            Loadfromfile(ind, a_index, INDEX);
         }
 
         ind = fopen(index, "wb");
         if(!ind){
+            fclose(db);
+            free(database);
+            free(index);
+            return 0;
+        }
+
+        a_deleted = (Array*)malloc(sizeof(Array));
+        if(!a_deleted){
+            fclose(db);
+            free(database);
+            free(index);
+            fclose(ind);
+            return 0;
+        }
+        initArray(a_deleted, 2);
+
+        deleted = (char*)malloc(strlen(argv[2])+strlen(".lst")+1*sizeof(char));
+        if(!deleted){
+            free(database);
+            return 0;
+        }
+
+        strcpy(deleted, argv[2]);
+        strcat(deleted, ".lst");
+        
+        if((del = fopen(deleted, "r"))!= NULL){
+            Loadfromfile(del, a_deleted, DELETED);
+        }
+
+        del = fopen(deleted, "wb");
+        if(!del){
             fclose(db);
             free(database);
             free(index);
@@ -82,13 +122,6 @@ int main( int argc, char *argv[]){
 
         strcpy(database, argv[2]);
         strcat(database, ".db");
-
-        /*db = fopen(database, "ab");
-        if(!db){
-            free(database);
-            free(index);
-            return 0;
-        }*/
 
         printf("Type command and argument/s.\n");
         printf("exit\n");
@@ -107,11 +140,11 @@ int main( int argc, char *argv[]){
                         return 0;
                     }
                 }
-                ret = add(db, ind, token, a);
+                ret = add(db, ind, token, a_index);
 
                 if(ret == -1){
-                    printf("Error en el guardado de los datos\n");
-                    Exit(db, ind, database, index, a);
+                    printf("Error storing the data\n");
+                    Exit(db, ind, del, database, index, deleted, a_index, a_deleted, strategy);
                     return 1;
                 }else if(ret == 0){
                     printf("The key has already been introduced\n");
@@ -120,24 +153,36 @@ int main( int argc, char *argv[]){
                     printf("exit\n");
                 }
             }else if(strcmp("find", key)== 0){
-                ret = find(database, a, atoi(token), 0, a->used);
+                ret = find(database, a_index, atoi(token), 0, a_index->used);
                 if(ret == -1){
                     printf("Record with bookId=%s does not exist\n", token);
-                    Exit(db, ind, database, index, a);
+                    Exit(db, ind, del, database, index, deleted, a_index, a_deleted, strategy);
                     return 1;
                 }
             }else if(strcmp("del", key)== 0){
-                printf("del\n");
+                ret = Del(a_index, a_deleted, atoi(token), strategy);
+                if(ret == -1){
+                    printf("Error storing the data\n");
+                    Exit(db, ind, del, database, index, deleted, a_index, a_deleted, strategy);
+                    return 1;
+                }else if(ret == 0){
+                    printf("Item with key %d does not exist\n", atoi(token));
+                    printf("exit\n");
+                }else{
+                    printf("Record with BookID=%d has been deleted\n", ret);
+                    printf("exit\n");
+                }
             }else if(strcmp("exit\n", key)== 0){
-                Exit(db, ind, database, index, a);
+                Exit(db, ind, del, database, index, deleted, a_index, a_deleted, strategy);
                 break;
             }else if(strcmp("printRec\n", key)== 0){
-                PrintRec(database, a);
+                PrintRec(database, a_index);
             }else if(strcmp("printInd\n", key)== 0){
-                printInd(a);
+                printInd(a_index);
                 printf("exit\n");
-            }else if(strcmp("printLst", key)== 0){
-                printf("printLst\n");
+            }else if(strcmp("printLst\n", key)== 0){
+                printLst(a_deleted);
+                printf("exit\n");
             }else{
                 printf("Error, that operation doesn't exists\n");
             }
@@ -294,7 +339,7 @@ int add(FILE *db, FILE *ind, char *arguments, Array *a){
     ibook->offset = ftell(db)-(book->tamanio+8);
     ibook->size = book->tamanio;
     /*insertar indexbook a array*/
-    insertArray(a, ibook);
+    insertArray(a, ibook, INDEX, NO_STRATEGY);
 
     /*hexdump -c archivo.bin*/
 
@@ -412,19 +457,76 @@ int find(char *database, Array *a, int key, int ip, int iu){
     return 1;
 }
 
-void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
+/* 
+ * Borra el registro del fichero de datos y actualiza tanto el índice como la
+ * lista de registros borrados.
+ */
+int Del(Array *a_index, Array *a_deleted, int key, int strategy){
+    int ip = 0, iu = a_index->used;
+    unsigned long int m;
+    Indexbook *index = NULL;
+    Indexdeletedbook *deleted = NULL;
+
+    deleted = (Indexdeletedbook*)malloc(sizeof(Indexdeletedbook));
+    if(!deleted) return -1;
+
+    while(ip<=iu){
+        m = (ip+iu)/2;
+        index = (Indexbook*)a_index->array[m];
+        if(index->key == key){
+            break;
+        }else if(key < index->key){
+            iu = m-1;
+        }else{
+            ip = m+1;
+        }
+    }
+
+    if(index->key != key){
+        return 0; /*no encontrada*/
+    }
+
+    deleted->offset = index->offset;
+    deleted->register_size = index->size;
+
+    insertArray(a_deleted, deleted, DELETED, strategy);
+
+    free(a_index->array[m]);
+    while(m<a_index->used-1){
+        a_index->array[m] = a_index->array[m+1];
+        m++;
+    }
+
+    a_index->used--;
+
+    return key;
+}
+
+void Exit(FILE *db, FILE *ind, FILE *del, char *database, char *index, char *deleted, Array *a_index, Array *a_deleted, int strategy){
     long unsigned int i;
-    Saveinfile(ind, a);
+    Saveinfile(ind, a_index, INDEX, NO_STRATEGY);
+    Saveinfile(del, a_deleted, DELETED, strategy);/*guardar la estrategia de borrado*/
     
-    if(a->array != NULL){
-        if(a->used != 0){
-            for(i=0; i<a->used; i++){
-                free(a->array[i]);
+    if(a_index->array != NULL){
+        if(a_index->used != 0){
+            for(i=0; i<a_index->used; i++){
+                free(a_index->array[i]);
             }
         }
         
-        free(a->array);
-        free(a);
+        free(a_index->array);
+        free(a_index);
+    }
+
+    if(a_deleted->array != NULL){
+        if(a_deleted->used != 0){
+            for(i=0; i<a_deleted->used; i++){
+                free(a_deleted->array[i]);
+            }
+        }
+        
+        free(a_deleted->array);
+        free(a_deleted);
     }
     
     if(db != NULL){
@@ -433,6 +535,10 @@ void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
     
     if(ind != NULL){
         fclose(ind);
+    }
+
+    if(del != NULL){
+        fclose(del);
     }
     
     if(database != NULL){
@@ -443,8 +549,9 @@ void Exit(FILE *db, FILE *ind, char *database, char *index, Array *a){
         free(index);
     }
 
-
-    
+    if(deleted != NULL){
+        free(deleted);
+    }
 }
 
 void PrintRec(char *database, Array *a){
@@ -514,44 +621,86 @@ void printInd(Array *a){
     }
 }
 
-void Saveinfile(FILE *ind, Array *a){
+void printLst(Array *a){
     unsigned i;
-    Indexbook *index = NULL;
+    Indexdeletedbook *deleted = NULL;
 
     for(i=0; i<a->used; i++){
-        /*printf("key en la posicion %d: %d\n", i, a->array[i].key);
-        printf("offset en la posicion %d: %ld\n", i, a->array[i].offset);
-        printf("tam en la posicion %d: %ld\n", i, a->array[i].size);*/
+        deleted = (Indexdeletedbook*)a->array[i];
 
-        index = (Indexbook*)a->array[i];
-
-        fwrite(&index->key, sizeof(int), 1, ind);
-        fwrite(&index->offset, sizeof(long), 1, ind);
-        fwrite(&index->size, sizeof(size_t), 1, ind);
+        printf("Entry #%d\n", i);
+        printf("    offset: #%ld\n", deleted->offset);
+        printf("    size: #%ld\n", deleted->register_size);
     }
 }
 
-void Loadfromfile(FILE *ind, Array *a){
+void Saveinfile(FILE *pf, Array *a, int file_type, int strategy){
+    unsigned i;
     Indexbook *index = NULL;
+    Indexdeletedbook *deleted = NULL;
+    
+    if(file_type == INDEX){
+        for(i=0; i<a->used; i++){
+            index = (Indexbook*)a->array[i];
+
+            fwrite(&index->key, sizeof(int), 1, pf);
+            fwrite(&index->offset, sizeof(long), 1, pf);
+            fwrite(&index->size, sizeof(size_t), 1, pf);
+        }
+    }else{
+        fwrite(&strategy, sizeof(int), 1, pf);
+
+        for(i=0; i<a->used; i++){
+            deleted = (Indexdeletedbook*)a->array[i];
+
+            fwrite(&deleted->offset, sizeof(size_t), 1, pf);
+            fwrite(&deleted->register_size, sizeof(size_t), 1, pf);
+        }
+    }
+}
+
+void Loadfromfile(FILE *pf, Array *a, int file_type){
+    Indexbook *index = NULL;
+    Indexdeletedbook *deleted = NULL;
+    int strategy;
     size_t ret = 1;
 
-    while(TRUE){
-        index = (Indexbook*)malloc(sizeof(Indexbook));
-        if(!index) return;
+    if(file_type == INDEX){
+        while(TRUE){
+            index = (Indexbook*)malloc(sizeof(Indexbook));
+            if(!index) return;
 
-        ret = fread(&index->key, sizeof(int), 1, ind);
-        ret = fread(&index->offset, sizeof(long), 1, ind);
-        ret = fread(&index->size, sizeof(size_t), 1, ind);
+            ret = fread(&index->key, sizeof(int), 1, pf);
+            ret = fread(&index->offset, sizeof(long), 1, pf);
+            ret = fread(&index->size, sizeof(size_t), 1, pf);
 
-        if(ret == 0){
-            break;
+            if(ret == 0){
+                break;
+            }
+
+            insertArray(a, index, INDEX, NO_STRATEGY);
         }
+        free(index);
+    }else{
+        ret = fread(&strategy, sizeof(int), 1, pf);
 
-        insertArray(a, index);
+        while(TRUE){
+            deleted = (Indexdeletedbook*)malloc(sizeof(Indexdeletedbook));
+            if(!deleted) return;
+
+            ret = fread(&deleted->offset, sizeof(size_t), 1, pf);
+            ret = fread(&deleted->register_size, sizeof(size_t), 1, pf);
+
+            if(ret == 0){
+                break;
+            }
+
+            insertArray(a, deleted, DELETED, strategy);
+        }
+        free(deleted);
     }
-
-    free(index);
-    fclose(ind);
+    
+    fclose(pf);
 }
 
 void initArray(Array *a, size_t initialSize){
@@ -568,8 +717,9 @@ void initArray(Array *a, size_t initialSize){
     }
 }
 
-void insertArray(Array *a, void *element){
+void insertArray(Array *a, void *element, int array_type, int strategy){
     Indexbook *elem = NULL, *key = NULL;
+    Indexdeletedbook *e = NULL, *deleted = NULL;
     int j;
     if(a->used == a->size){
         a->size *=2;
@@ -577,22 +727,59 @@ void insertArray(Array *a, void *element){
     }
 
     a->array[a->used] = element;
-
     if(a->used > 0){
-        elem = (Indexbook*)a->array[a->used];
-        j = a->used-1;
+        if(array_type == INDEX){
+            elem = (Indexbook*)a->array[a->used];
+            j = a->used-1;
 
-        key = (Indexbook*)a->array[j];
-
-        while (j>= 0 && key->key > elem->key){
             key = (Indexbook*)a->array[j];
-            a->array[j+1] = a->array[j];
-            j--;
+
+            while (j>= 0 && key->key > elem->key){
+                key = (Indexbook*)a->array[j];
+                a->array[j+1] = a->array[j];
+                j--;
+            }
+
+            a->array[j+1] = elem;
+        
+        }else{
+            if(strategy == BESTFIT){
+                deleted = (Indexdeletedbook*)a->array[a->used];
+                j = a->used-1;
+
+                e = (Indexdeletedbook*)a->array[j];
+
+                while (j>= 0 && e->register_size > deleted->register_size){
+                    a->array[j+1] = a->array[j];
+                    j--;
+                    
+                    if(j>=0){
+                        e = (Indexdeletedbook*)a->array[j];
+                    }
+                }
+
+                a->array[j+1] = deleted;
+            }
+            if(strategy == WORSTFIT){
+                deleted = (Indexdeletedbook*)a->array[a->used];
+                j = a->used-1;
+
+                e = (Indexdeletedbook*)a->array[j];
+
+                while (j>= 0 && e->register_size < deleted->register_size){
+                    a->array[j+1] = a->array[j];
+                    j--;
+
+                    if(j>=0){
+                        e = (Indexdeletedbook*)a->array[j];
+                    }
+                }
+
+                a->array[j+1] = deleted;
+            }
         }
-
-        a->array[j+1] = elem;
     }
-
+    
     a->used++;
 }
 

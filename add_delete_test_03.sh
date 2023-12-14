@@ -5,12 +5,12 @@
 ##     and file with list is saved
 # b.1 firstfit
 set timeout -1
-set programName "library"
+set programName "src/library"
 set filename "test"
 
 # delete all files starting with test
 # file delete [glob test*]
-spawn rm -f $filename.db $filename.ind
+spawn rm -f $filename.db $filename.ind $filename.lst
 
 # call program
 #spawn valgrind ./$programName best_fit test
