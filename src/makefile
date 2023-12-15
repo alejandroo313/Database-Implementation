@@ -1,17 +1,24 @@
 CC = gcc -g
 CFLAGS = -Wall -Wextra -pedantic -ansi
 
-HEADERS = library.h
+LOBJ = utils.o array.o library.o
 
-EXE = library main
+EXE = library
 OBJ = $(EXE)
 
 all: $(EXE) 
 
-# compile all files ending in *.c
-%.o: %.c $(HEADERS)
-	@echo Compiling $<...
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(EXE): $(LOBJ) 
+	$(CC) -o library $(LOBJ) 
+
+library.o: library.c array.h utils.h 
+	$(CC) $(CFLAGS) -c library.c
+
+utils.o: utils.c utils.h types.h
+	$(CC) $(CFLAGS) -c utils.c
+
+array.o: array.c array.h types.h
+	$(CC) $(CFLAGS) -c array.c
 
 bestfit:
 	@echo Running library database with best_fit strategy
@@ -28,6 +35,6 @@ firstfit:
 clean:
 	rm -f *.o core $(EXE)
 
-delete:
+remove:
 	@echo Deleting all database files
 	rm *.db *.ind *.lst
