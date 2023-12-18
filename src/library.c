@@ -49,6 +49,7 @@ int main( int argc, char *argv[]){
         
         if((ind = fopen(index, "r"))!= NULL){
             if((Loadfromfile(ind, a_index, INDEX))==ERROR){
+                printf("Error cargando los datos del indice\n");
                 freeArray(a_index);
                 free(index);
                 fclose(ind);
@@ -86,6 +87,7 @@ int main( int argc, char *argv[]){
         
         if((del = fopen(deleted, "r"))!= NULL){
             if((Loadfromfile(del, a_deleted, DELETED))==ERROR){
+                printf("Error cargando los datos de los registros borrados\n");
                 freeArray(a_index);
                 free(index);
                 fclose(ind);
@@ -117,6 +119,15 @@ int main( int argc, char *argv[]){
         strcpy(database, argv[2]);
         strcat(database, ".db");
 
+        if(db == NULL){
+            db = fopen(database, "wb+");
+            if(!db){
+                free(database);
+                free(index);
+                return 0;
+            }
+        }
+
         printf("Type command and argument/s.\n");
         printf("exit\n");
         while (fgets(input, sizeof(input), stdin)) {
@@ -126,17 +137,7 @@ int main( int argc, char *argv[]){
             token = strtok(NULL, "");
 
             if(strcmp("add", key) == 0){
-
-                if(db == NULL){
-                    db = fopen(database, "ab+");
-                    if(!db){
-                        free(database);
-                        free(index);
-                        return 0;
-                    }
-                }
-
-                ret = add(db, token, a_index);
+                ret = add(db, token, a_index, a_deleted);
 
                 if(ret == -1){
                     printf("Error storing the data\n");
@@ -156,15 +157,15 @@ int main( int argc, char *argv[]){
                 if(ret == -1){
                     printf("Error searching the book\n");
                     Exit(db, ind, del, database, index, deleted, a_index, a_deleted, strategy);
-                }else if(ret == 0){
-                    printf("Record with bookId=%s does not exist\n", token);
-                    Exit(db, ind, del, database, index, deleted, a_index, a_deleted, strategy);
                     return 1;
+                }else if(ret == 0){
+                    printf("Record with bookId=%d does not exist\n", atoi(token));
+                    Exit(db, ind, del, database, index, deleted, a_index, a_deleted, strategy);
                 }
 
             }else if(strcmp("del", key)== 0){
 
-                ret = Del(a_index, a_deleted, atoi(token), strategy);
+                ret = Del(a_index, a_deleted, db, atoi(token), strategy);
 
                 if(ret == -1){
                     printf("Error storing the data\n");

@@ -33,7 +33,7 @@ typedef struct _Indexdeletedbook{
   * @param a_index un puntero al Array de indices para comprobar que el registro que se va a introducir no esta ya introducido
   * @return -1 si ha habido algun error durante la ejecucion, 0 si el id del libro ya ha sido introducido o book_id si todo ha salido correctamente
   */
-int add(FILE *db, char *arguments, Array *a_index);
+int add(FILE *db, char *arguments, Array *a_index, Array *a_deleted);
 
 /**
   * @brief Busca un libro en la base de datos de libros
@@ -56,7 +56,7 @@ int find(FILE *db, Array *a, int key, int ip, int iu);
   * @param strategy la estrategia (Best_fit, Worst_fit o First_fit) para el borrado
   * @return -1 si ha habido algun error durante la ejecucion, 0 si el id del libro no esta en la base de datos y la key del libro borrado si sale todo bien.
   */
-int Del(Array *a_index, Array *a_deleted, int key, int strategy);
+int Del(Array *a_index, Array *a_deleted, FILE *db, int key, int strategy);
 
 /**
   * @brief Libera toda la memoria usada por el programa, guarda los arrays de indices y de registros borrados

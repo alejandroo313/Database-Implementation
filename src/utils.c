@@ -19,10 +19,11 @@ typedef struct _Book{
 /** add reserva memoria para una entrada del array de indices
   *  y lo inicializa
   */
-int add(FILE *db, char *arguments, Array *a_index){
+int add(FILE *db, char *arguments, Array *a_index, Array *a_deleted){
     char *token = NULL;
     Book *book = NULL;
     Indexbook *ibook = NULL;
+    Indexdeletedbook *deleted = NULL;
     int ret = 0;
     size_t length = 0;
     long unsigned int i;
@@ -34,7 +35,6 @@ int add(FILE *db, char *arguments, Array *a_index){
 
     book = (Book*)malloc(sizeof(Book));
     if(!book) return -1;
-    book->tamanio = 0;
 
     /* sacamos book_id de arguments y lo copiamos a la estructura */
     token = strtok(arguments, "|");
@@ -127,6 +127,22 @@ int add(FILE *db, char *arguments, Array *a_index){
     /*obtenemos el tamaño total del registro*/
     book->tamanio = ISBN_LEN + strlen(book->titulo) + strlen(book->editorial) + sizeof(book->id);
     
+    for(i=0; i<a_deleted->used; i++){
+        deleted = (Indexdeletedbook*) a_deleted->array[i];
+        if(deleted->register_size >= book->tamanio){
+            fseek(db, deleted->offset, SEEK_SET);
+
+            /* se borra la entrada y se mueven todas una posicion a la izquierda */
+            free(a_deleted->array[i]);
+            while(i<a_deleted->used-1){
+                a_deleted->array[i] = a_deleted->array[i+1];
+                i++;
+            }
+
+            a_deleted->used--;
+        }
+    }
+
     /*copiamos toda la informacion en el fichero binario*/
     ret = fwrite(&book->tamanio, sizeof(size_t), 1, db);
     ret = fwrite(&book->id, sizeof(int), 1, db);
@@ -292,17 +308,16 @@ int find(FILE *db, Array *a, int key, int ip, int iu){
  * Borra el registro del fichero de datos y actualiza tanto el índice como la
  * lista de registros borrados.
  */
-int Del(Array *a_index, Array *a_deleted, int key, int strategy){
-    int ip = 0, iu = a_index->used;
+int Del(Array *a_index, Array *a_deleted, FILE *db, int key, int strategy){
+    int ip = 0, iu;
     unsigned long int m;
     Indexbook *index = NULL;
     Indexdeletedbook *deleted = NULL;
+    char buffer[255] = {'\0'};
 
     if(!a_index || !a_deleted || key<0 || strategy<-1) return -1;
 
-    /* se reserva memoria para una nueva entrada al array de registros borrados*/
-    deleted = (Indexdeletedbook*)malloc(sizeof(Indexdeletedbook));
-    if(!deleted) return -1;
+    iu = a_index->used;
 
     /* se realiza la Busqueda Binaria sobre la clave*/
     while(ip<=iu){
@@ -322,8 +337,19 @@ int Del(Array *a_index, Array *a_deleted, int key, int strategy){
         return 0; 
     }
 
+    /* se reserva memoria para una nueva entrada al array de registros borrados*/
+    deleted = (Indexdeletedbook*)malloc(sizeof(Indexdeletedbook));
+    if(!deleted) return -1;
+
     deleted->offset = index->offset;
     deleted->register_size = index->size;
+
+    fseek(db, deleted->offset, SEEK_SET);
+    
+    if((fwrite(buffer, deleted->register_size, 1, db)) != 1){
+        free(deleted);
+        return -1;
+    }
 
     if((insertArray(a_deleted, deleted, DELETED, strategy)) == ERROR){
         free(deleted);
@@ -449,6 +475,8 @@ void printInd(Array *a){
     unsigned i;
     Indexbook *index = NULL;
 
+    if(!a) return;
+
     for(i=0; i<a->used; i++){
         index = (Indexbook*)a->array[i];
 
@@ -465,6 +493,8 @@ void printInd(Array *a){
 void printLst(Array *a){
     unsigned i;
     Indexdeletedbook *deleted = NULL;
+
+    if(!a) return;
 
     for(i=0; i<a->used; i++){
         deleted = (Indexdeletedbook*)a->array[i];
@@ -540,7 +570,7 @@ STATUS Loadfromfile(FILE *pf, Array *a, int file_type){
             ret = fread(&index->size, sizeof(size_t), 1, pf);
 
             if(ret == 0){
-                return ERROR;
+                break;
             }
 
             insertArray(a, index, INDEX, NO_STRATEGY);
@@ -548,6 +578,10 @@ STATUS Loadfromfile(FILE *pf, Array *a, int file_type){
         free(index);
     }else{
         ret = fread(&strategy, sizeof(int), 1, pf);
+
+        if(ret != 1){
+            return ERROR;
+        }
 
         while(TRUE){
             deleted = (Indexdeletedbook*)malloc(sizeof(Indexdeletedbook));
@@ -557,7 +591,7 @@ STATUS Loadfromfile(FILE *pf, Array *a, int file_type){
             ret = fread(&deleted->register_size, sizeof(size_t), 1, pf);
 
             if(ret == 0){
-                return ERROR;
+                break;
             }
 
             insertArray(a, deleted, DELETED, strategy);
