@@ -3,7 +3,7 @@
 # add test no check if index is loaded
 # properly when program is started
 set timeout -1
-set programName "src/library"
+set programName "../src/library"
 set filename "test"
 
 # create index and database

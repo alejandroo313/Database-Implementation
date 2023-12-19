@@ -14,6 +14,15 @@ typedef struct _Array{
 #include "utils.h"
 
 /**
+  * @brief Realiza un swap entre dos valores
+  * 
+  * @param val1 puntero al primer valor que vamos a swappear
+  * @param val2 puntero al segundo valor
+  * @return no tiene retorno
+  */
+void swap(void *val1, void *val2);
+
+/**
   * @brief Inicializa un array reservando memoria para las posiciones que indique initialSize
   * 
   * @param a puntero al array que vamos a inicializar

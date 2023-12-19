@@ -5,7 +5,7 @@
 ##     and file with list is saved
 # b.1 firstfit
 set timeout -1
-set programName "src/library"
+set programName "../src/library"
 set filename "test"
 
 # delete all files starting with test

@@ -15,13 +15,13 @@ int main( int argc, char *argv[]){
     
     if(argc <3){
         printf("Missing argument\n");
-        return 1;
+        return 0;
     }else{
 
         /* Control de la estrategia de borrado */
         if (strcmp(argv[1], "best_fit") != 0 && strcmp(argv[1], "first_fit") != 0  && strcmp(argv[1], "worst_fit") != 0){
             printf("Unknown search strategy unknown_search_strategy\n");
-            return 1;
+            return 0;
         }
 
         if(strcmp("best_fit", argv[1]) == 0){
@@ -92,6 +92,7 @@ int main( int argc, char *argv[]){
                 free(index);
                 fclose(ind);
                 fclose(del);
+                free(deleted);
                 freeArray(a_deleted);
                 return 1;
             }

@@ -55,9 +55,12 @@ STATUS insertArray(Array *a, void *element, int array_type, int strategy){
             key = (Indexbook*)a->array[j];
 
             while (j>= 0 && key->key > elem->key){
-                key = (Indexbook*)a->array[j];
                 a->array[j+1] = a->array[j];
                 j--;
+
+                if(j>=0){
+                    key = (Indexbook*)a->array[j];
+                }
             }
 
             a->array[j+1] = elem;
